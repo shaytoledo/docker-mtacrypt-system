@@ -24,4 +24,12 @@ It consists of two main components:
 
 ---
 
-## Project Structure
+## How To Run 
+# 1) Create the FIFO
+sudo bash ./scripts/setup_fifo.sh
+
+# 2) Run the pipeline (example: 10 values)
+sudo bash ./scripts/start_pipeline.sh --count 10
+
+# 3) View logs
+sudo tail -f /var/log/mtacrypt.log
