@@ -1,0 +1,104 @@
+# ===== Part 1 (fixed) — project skeleton + build/push/verify =====
+
+# 1) Create project skeleton
+mkdir -p ~/mtaproj/{docker/rng,docker/decrypter,src,runtime,build}
+cd ~/mtaproj
+
+# 2) Demo sources
+cat > src/mtaproj-rng.sh << 'EOF'
+#!/usr/bin/env sh
+# RNG demo: print a random number every second
+while true; do awk 'BEGIN{srand(); print int(rand()*1000000)}'; sleep 1; done
+EOF
+chmod +x src/mtaproj-rng.sh
+
+cat > src/mtaproj-decrypter.sh << 'EOF'
+#!/usr/bin/env sh
+# Decrypter demo: echo each input as "DECRYPTED: ..."
+while read -r line; do echo "DECRYPTED: $line"; done
+EOF
+chmod +x src/mtaproj-decrypter.sh
+
+# Temporary “binaries” (can be replaced later by real ones)
+cp src/mtaproj-rng.sh        build/mtaproj-rng
+cp src/mtaproj-decrypter.sh  build/mtaproj-decrypter
+chmod +x build/mtaproj-rng build/mtaproj-decrypter
+
+# 3) Dockerfiles (RNG already runs via sh to avoid exec-format issues)
+cat > docker/rng/Dockerfile << 'EOF'
+FROM alpine:3.20
+WORKDIR /app
+COPY /build/mtaproj-rng /usr/local/bin/mtaproj-rng
+RUN chmod +x /usr/local/bin/mtaproj-rng
+# IMPORTANT: run via sh
+ENTRYPOINT ["sh","/usr/local/bin/mtaproj-rng"]
+EOF
+
+cat > docker/decrypter/Dockerfile << 'EOF'
+FROM alpine:3.20
+WORKDIR /app
+COPY /build/mtaproj-decrypter /usr/local/bin/mtaproj-decrypter
+RUN chmod +x /usr/local/bin/mtaproj-decrypter
+ENTRYPOINT ["/usr/local/bin/mtaproj-decrypter"]
+EOF
+
+# 4) Makefile
+cat > Makefile << 'EOF'
+HUB          ?= omerovadia1
+PROJECT      ?= mtaproj
+RNG_NAME     ?= $(PROJECT)-rng
+DEC_NAME     ?= $(PROJECT)-decrypter
+TAGS         ?= latest
+
+RNG_DOCKERFILE ?= docker/rng/Dockerfile
+DEC_DOCKERFILE ?= docker/decrypter/Dockerfile
+BUILD_ARGS   ?= --platform linux/amd64
+
+.PHONY: all build push rng rng-push dec dec-push login clean verify
+
+all: build push
+
+login:
+	@docker login -u $(HUB)
+
+build: rng dec
+
+rng:
+	@for tag in $(TAGS); do \
+	  docker build $(BUILD_ARGS) -f $(RNG_DOCKERFILE) -t $(HUB)/$(RNG_NAME):$$tag . || exit 1; \
+	done
+
+dec:
+	@for tag in $(TAGS); do \
+	  docker build $(BUILD_ARGS) -f $(DEC_DOCKERFILE) -t $(HUB)/$(DEC_NAME):$$tag . || exit 1; \
+	done
+
+push: rng-push dec-push
+
+rng-push:
+	@for tag in $(TAGS); do docker push $(HUB)/$(RNG_NAME):$$tag || exit 1; done
+
+dec-push:
+	@for tag in $(TAGS); do docker push $(HUB)/$(DEC_NAME):$$tag || exit 1; done
+
+verify:
+	@docker pull $(HUB)/$(RNG_NAME):latest
+	@docker pull $(HUB)/$(DEC_NAME):latest
+	@echo "RNG run (3s)..."; timeout 3 docker run --rm $(HUB)/$(RNG_NAME):latest || true
+	@echo "Decrypter echo test..."; echo "hello" | docker run -i --rm $(HUB)/$(DEC_NAME):latest
+
+clean:
+	-@for tag in $(TAGS); do \
+	  docker rmi $(HUB)/$(RNG_NAME):$$tag 2>/dev/null || true; \
+	  docker rmi $(HUB)/$(DEC_NAME):$$tag 2>/dev/null || true; \
+	done
+EOF
+
+# 5) Build + push + verify
+docker login -u omerovadia1
+make all HUB=omerovadia1
+make verify HUB=omerovadia1
+
+# (Optional) quick manual run
+# docker run --rm omerovadia1/mtaproj-rng:latest       # Ctrl+C to stop
+# echo "hello" | docker run -i --rm omerovadia1/mtaproj-decrypter:latest
