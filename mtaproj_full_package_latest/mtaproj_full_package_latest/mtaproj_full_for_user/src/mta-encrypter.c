@@ -13,7 +13,6 @@
 #include "mta_crypt.h"
 #include "mta_rand.h"
 
-/* ===== constants kept identical ===== */
 #define ENCRYPTER_PIPE "/mnt/mta/server_pipe"
 #define PIPE_DIR       "/mnt/mta/"
 #define CONF_FILE      "/mnt/mta/mtacrypt.conf"
@@ -29,13 +28,11 @@ typedef struct {
     int  active;
 } decrypter_t;
 
-/* ===== global state kept (same semantics) ===== */
 static decrypter_t g_dec[MAX_DECRYPTERS];
 static int         g_dec_count = 0;
 static unsigned int g_pwd_len  = 24;
 static FILE*       g_log = NULL;
 
-/* ===== helpers kept to preserve exact log text/format ===== */
 static long ts_now_sec(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -56,7 +53,6 @@ static void log_printf(const char *fmt, ...) {
     va_end(ap);
 }
 
-/* ===== behavior preserved: printable random via mta_rand ===== */
 static void gen_printable(char* buf, unsigned int len) {
     for (unsigned int i = 0; i < len; ++i) {
         char c;
@@ -65,7 +61,6 @@ static void gen_printable(char* buf, unsigned int len) {
     }
 }
 
-/* ===== behavior preserved: read CONF_FILE → PASSWORD_LENGTH ===== */
 static void read_config(void) {
     log_printf("Reading /mnt/mta/mtacrypt.conf...\n");
     FILE* f = fopen(CONF_FILE, "r");
@@ -84,7 +79,6 @@ static void read_config(void) {
     fclose(f);
 }
 
-/* ===== identical semantics: register decrypter by pipe name ===== */
 static int register_decrypter(const char* pipe_name) {
     for (int i = 0; i < g_dec_count; ++i) {
         if (strcmp(g_dec[i].pipe_name, pipe_name) == 0) {
@@ -105,7 +99,6 @@ static int register_decrypter(const char* pipe_name) {
     return id;
 }
 
-/* ===== identical semantics: send to specific decrypter FIFO ===== */
 static void send_to_decrypter_idx(int idx, const char* enc, unsigned int enc_len) {
     char full[1024];
     snprintf(full, sizeof(full), "%s%s", PIPE_DIR, g_dec[idx].pipe_name);
@@ -124,7 +117,6 @@ static void send_to_decrypter_idx(int idx, const char* enc, unsigned int enc_len
     close(fd);
 }
 
-/* ===== identical semantics: broadcast ===== */
 static void broadcast_password(const char* enc, unsigned int enc_len) {
     for (int i = 0; i < g_dec_count; ++i) {
         if (g_dec[i].active) send_to_decrypter_idx(i, enc, enc_len);
@@ -158,9 +150,7 @@ int main(void) {
     int first_pwd = 1;
 
     for (;;) {
-        /* ===== generate & broadcast as in original ===== */
         if (!pwd) {
-            /* allocate according to g_pwd_len */
             key_len = g_pwd_len / 8;
             pwd = (char*)malloc(g_pwd_len);
             key = (char*)malloc(key_len);
