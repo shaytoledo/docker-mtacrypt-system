@@ -13,7 +13,6 @@
 #include "mta_crypt.h"
 #include "mta_rand.h"
 
-/* ===== constants kept identical ===== */
 #define PIPE_DIR       "/mnt/mta/"
 #define ENCRYPTER_PIPE "/mnt/mta/server_pipe"
 #define LOG_FILE       "/var/log/mtacrypt.log"
@@ -24,7 +23,6 @@
 static int  g_id = 1;
 static FILE* g_log = NULL;
 
-/* ===== helpers preserved for identical output ===== */
 static long ts_now_sec(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -51,7 +49,6 @@ static void log_printf(const char *fmt, ...) {
     va_end(ap);
 }
 
-/* identical policy: first unused id in 1..32 by checking pipe existence */
 static int next_available_id(void) {
     for (int id = 1; id <= 32; ++id) {
         char p[MAX_PIPE_NAME];
@@ -81,7 +78,6 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
-    /* identical registration loop (non-blocking write to server pipe) */
     for (;;) {
         int reg_fd = open(ENCRYPTER_PIPE, O_WRONLY | O_NONBLOCK);
         if (reg_fd >= 0) {
@@ -129,7 +125,6 @@ int main(void) {
             }
         }
 
-        /* identical brute-force structure (random keys, check printable) */
         while (have_pwd) {
             ++iters;
             char* guess = (char*)malloc(key_len);
@@ -147,13 +142,11 @@ int main(void) {
                     print_str(g_log, guess, key_len);
                     log_printf(" (in %lu iterations)\n", iters);
 
-                    /* identical SOLUTION message back to server */
                     int sfd = open(ENCRYPTER_PIPE, O_WRONLY | O_NONBLOCK);
                     if (sfd >= 0) {
                         char header[64];
                         int hlen = snprintf(header, sizeof(header), "SOLUTION:%d:", g_id);
 
-                        /* build SOLUTION line exactly as original */
                         char out[MAX_MSG + 64];
                         memcpy(out, header, hlen);
                         memcpy(out + hlen, plain, plain_len);
@@ -169,7 +162,6 @@ int main(void) {
             free(guess);
             free(plain);
 
-            /* identical poll for new password every 1000 iters */
             if (iters % 1000 == 0) {
                 char newer[MAX_MSG];
                 ssize_t nn = read(fd, newer, sizeof(newer));
